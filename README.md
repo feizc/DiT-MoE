@@ -1,2 +1,1 @@
-# DiT-MoE
-Scaling Diffusion Transformers with Mixture of Experts
+## DiT-MoE: Scaling Diffusion Transformers with Mixture of Experts
