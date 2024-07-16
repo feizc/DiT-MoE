@@ -30,7 +30,7 @@ import os
 from models import DiT_models
 from diffusion import create_diffusion
 from diffusers.models import AutoencoderKL
-
+from download import find_model
 
 #################################################################################
 #                             Training Helper Functions                         #
@@ -143,10 +143,18 @@ def main(args):
         input_size=latent_size,
         num_classes=args.num_classes
     )
+
+    if args.resume is not None: 
+        print('load from: ', args.resume) 
+        state_dict = find_model(args.resume)
+        model.load_state_dict(state_dict)
+
+
     # Note that parameter initialization is done within the DiT constructor
     ema = deepcopy(model).to(device)  # Create an EMA of the model for use after training
     requires_grad(ema, False)
-    model = DDP(model.to(device), device_ids=[rank])
+    # model = DDP(model.to(device), device_ids=[rank])
+    model = DDP(model.to(device), device_ids=[device])
     diffusion = create_diffusion(timestep_respacing="")  # default: 1000 steps, linear noise schedule 
     vae_path = '/maindata/data/shared/multimodal/zhengcong.fei/ckpts/sd-vae-ft-mse'
     vae = AutoencoderKL.from_pretrained(vae_path).to(device)
@@ -259,12 +267,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-path", type=str, required=True)
     parser.add_argument("--results-dir", type=str, default="results")
+    parser.add_argument("--resume", type=str, default=None)
     parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-L/2")
     parser.add_argument("--image-size", type=int, choices=[256, 512], default=256)
     parser.add_argument("--num-classes", type=int, default=1000)
     parser.add_argument("--epochs", type=int, default=1400)
-    parser.add_argument("--global-batch-size", type=int, default=16)
-    parser.add_argument("--global-seed", type=int, default=0)
+    parser.add_argument("--global-batch-size", type=int, default=64)
+    parser.add_argument("--global-seed", type=int, default=12)
     parser.add_argument("--vae", type=str, choices=["ema", "mse"], default="ema")  # Choice doesn't affect training
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--log-every", type=int, default=100)

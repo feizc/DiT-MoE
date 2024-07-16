@@ -38,9 +38,9 @@ def main(args):
     # Auto-download a pre-trained model or load a custom DiT checkpoint from train.py:
     
     if args.model == "DiT-S/2":
-        ckpt_path = "results/002-DiT-S-2/checkpoints/0600000.pt" 
+        ckpt_path = "results/002-DiT-S-2/checkpoints/1700000.pt" 
     else:
-        ckpt_path = "results/000-DiT-L-2/checkpoints/0550000.pt" 
+        ckpt_path = "results/003-DiT-B-2/checkpoints/0400000.pt" 
 
     state_dict = find_model(ckpt_path)
     model.load_state_dict(state_dict)
@@ -48,7 +48,7 @@ def main(args):
     diffusion = create_diffusion(str(args.num_sampling_steps))
     vae_path = '/maindata/data/shared/multimodal/zhengcong.fei/ckpts/sd-vae-ft-mse'
     vae = AutoencoderKL.from_pretrained(vae_path).to(device) 
-
+    
     # Labels to condition the model with (feel free to change):
     class_labels = [207, 360, 387, 974, 88, 979, 417, 279]
 
@@ -74,17 +74,17 @@ def main(args):
     if args.model == "DiT-S/2":
         save_image(samples, "sample_s.png", nrow=4, normalize=True, value_range=(-1, 1))
     else:
-        save_image(samples, "sample_l.png", nrow=4, normalize=True, value_range=(-1, 1))
+        save_image(samples, "sample_b.png", nrow=4, normalize=True, value_range=(-1, 1))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-S/2")
+    parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-B/2")
     parser.add_argument("--vae", type=str, choices=["ema", "mse"], default="mse")
     parser.add_argument("--image-size", type=int, choices=[256, 512], default=256)
     parser.add_argument("--num-classes", type=int, default=1000)
     parser.add_argument("--cfg-scale", type=float, default=4.0)
     parser.add_argument("--num-sampling-steps", type=int, default=250)
-    parser.add_argument("--seed", type=int, default=1234)
+    parser.add_argument("--seed", type=int, default=22)
     parser.add_argument("--ckpt", type=str, default=None,
                         help="Optional path to a DiT checkpoint (default: auto-download a pre-trained DiT-XL/2 model).")
     args = parser.parse_args()

@@ -18,6 +18,10 @@ from timm.models.vision_transformer import PatchEmbed, Attention, Mlp
 import torch.nn.functional as F
 
 
+# selected_ids_list = []
+
+
+
 def modulate(x, shift, scale):
     return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
 
@@ -124,7 +128,8 @@ class MoEGate(nn.Module):
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
     
     def forward(self, hidden_states):
-        bsz, seq_len, h = hidden_states.shape        
+        bsz, seq_len, h = hidden_states.shape    
+        # print(bsz, seq_len, h)    
         ### compute gating score
         hidden_states = hidden_states.view(-1, h)
         logits = F.linear(hidden_states, self.weight, None)
@@ -239,7 +244,11 @@ class SparseMoeBlock(nn.Module):
     def forward(self, hidden_states):
         identity = hidden_states
         orig_shape = hidden_states.shape
-        topk_idx, topk_weight, aux_loss = self.gate(hidden_states)
+        topk_idx, topk_weight, aux_loss = self.gate(hidden_states) 
+        # print(topk_idx.tolist(), print(len(topk_idx.tolist()))) 
+        # global selected_ids_list
+        # selected_ids_list.append(topk_idx.tolist())
+
         hidden_states = hidden_states.view(-1, hidden_states.shape[-1])
         flat_topk_idx = topk_idx.view(-1)
         if self.training:
@@ -259,10 +268,10 @@ class SparseMoeBlock(nn.Module):
 
     @torch.no_grad()
     def moe_infer(self, x, flat_expert_indices, flat_expert_weights):
-        expert_cache = torch.zeros_like(x)
+        expert_cache = torch.zeros_like(x) 
         idxs = flat_expert_indices.argsort()
         tokens_per_expert = flat_expert_indices.bincount().cpu().numpy().cumsum(0)
-        token_idxs = idxs // self.num_experts_per_tok
+        token_idxs = idxs // self.num_experts_per_tok 
         for i, end_idx in enumerate(tokens_per_expert):
             start_idx = 0 if i == 0 else tokens_per_expert[i-1]
             if start_idx == end_idx:
@@ -363,6 +372,7 @@ class DiT(nn.Module):
         mlp_ratio=4,
         class_dropout_prob=0.1,
         num_classes=1000,
+        num_experts=8, num_experts_per_tok=2,
         learn_sigma=True,
     ):
         super().__init__()
@@ -380,7 +390,7 @@ class DiT(nn.Module):
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, hidden_size), requires_grad=False)
 
         self.blocks = nn.ModuleList([
-            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+            DiTBlock(hidden_size, num_heads, mlp_ratio, num_experts, num_experts_per_tok, ) for _ in range(depth)
         ])
         self.final_layer = FinalLayer(hidden_size, patch_size, self.out_channels)
         self.initialize_weights()
@@ -531,6 +541,10 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
 #                                   DiT Configs                                  #
 #################################################################################
 
+
+def DiT_G_2(**kwargs):
+    return DiT(depth=40, hidden_size=1408, patch_size=2, num_heads=16, **kwargs)
+
 def DiT_XL_2(**kwargs):
     return DiT(depth=28, hidden_size=1152, patch_size=2, num_heads=16, **kwargs)
 
@@ -573,4 +587,5 @@ DiT_models = {
     'DiT-L/2':  DiT_L_2,   'DiT-L/4':  DiT_L_4,   'DiT-L/8':  DiT_L_8,
     'DiT-B/2':  DiT_B_2,   'DiT-B/4':  DiT_B_4,   'DiT-B/8':  DiT_B_8,
     'DiT-S/2':  DiT_S_2,   'DiT-S/4':  DiT_S_4,   'DiT-S/8':  DiT_S_8,
+    'DiT-G/2': DiT_G_2,
 }
