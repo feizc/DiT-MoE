@@ -1,4 +1,4 @@
-## Scaling Diffusion Transformers with Mixture of Experts <br><sub>Official PyTorch Implementation</sub>
+![image](https://github.com/user-attachments/assets/bf922145-48b2-40cc-9d15-bd1cc608d785)## Scaling Diffusion Transformers with Mixture of Experts <br><sub>Official PyTorch Implementation</sub>
 
 [![arXiv](https://img.shields.io/badge/arXiv-2407.11633-b31b1b.svg)](https://arxiv.org/abs/2407.11633)
 
@@ -30,6 +30,19 @@ torchrun --nnodes=1 --nproc_per_node=N train.py \
 --data-path /path/to/imagenet/train \
 --image-size 256 \
 --global-batch-size 256
+```
+
+For multiple node training, we solve the [bug](https://github.com/facebookresearch/DiT/blob/main/train.py#L149) at original DiT repository, and you can run with 8 nodes as: 
+```bash
+torchrun --nnodes=8 \
+    --node_rank=0 \
+    --nproc_per_node=8 \
+    --master_addr="10.0.0.0" \
+    --master_port=1234 \
+    train.py \
+    --model DiT-B/2 \
+    --global-batch-size 1024 \
+    --data-path /path/to/imagenet/train
 ```
 
 
