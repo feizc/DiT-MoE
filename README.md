@@ -11,26 +11,57 @@ DiT-MoE as a sparse version of the diffusion Transformer, is scalable and compet
 * 🪐 A PyTorch [implementation](models.py) of DiT-MoE
 * ⚡️ Pre-trained checkpoints in paper
 * 💥 A [sampling script](sample.py) for running pre-trained DiT-MoE 
-* 🛸 A DiT-MoE [training script](train.py) using PyTorch DDP 
+* 🛸 A DiT-MoE training script using PyTorch [DDP](train.py) and FSDP
 
 
-### To do list
+### To-do list
 
-1. training / inference scripts
-2. huggingface ckpts
-3. experts routing analysis
-4. synthesized data
+- [] training / inference scripts
+- [] huggingface ckpts
+- [] experts routing analysis
+- [] synthesized data
 
 ### 1. Training 
 
+To launch DiT-MoE-S/2 (256x256) in the latent space training with `N` GPUs on one node with pytorch DDP:
+```bash
+torchrun --nnodes=1 --nproc_per_node=N train.py \
+--model DiT-S/2 \
+--data-path /path/to/imagenet/train \
+--image-size 256 \
+--global-batch-size 256
+```
 
-### 2. CKPTs and Data 
+
+### 2. Inference 
 
 
-### 3. Expert Specialization Analysis Tools
+We include a [`sample.py`](sample.py) script which samples images from a DiT-MoE model. 
+```bash
+python sample.py \
+--model DiT-S/2 \
+--ckpt /path/to/model \
+--image-size 256 \
+--cfg-scale 1.5
+```
 
 
-### 4. BibTeX
+### 3. Download Models and Data 
+
+| DiT-MoE Model     | Image Resolution | Url | 
+|---------------|------------------|---------|
+| DiT-MoE-S/2-8E2A | 256x256          | -   | 
+| DiT-MoE-S/2-16E2A | 256x256         | -   | 
+| DiT-MoE-B/2-8E2A | 256x256         | -   | 
+| DiT-MoE-XL/2-8E2A | 256x256         | -   | 
+| DiT-MoE-XL/2-8E2A | 512x512         | -   | 
+| DiT-MoE-G/2-16E2A | 512x512         | -   | 
+
+
+### 4. Expert Specialization Analysis Tools
+
+
+### 5. BibTeX
 
 ```bibtex
 @article{FeiDiTMoE2024,
@@ -42,7 +73,7 @@ DiT-MoE as a sparse version of the diffusion Transformer, is scalable and compet
 ```
 
 
-### 5. Acknowledgments
+### 6. Acknowledgments
 
 The codebase is based on the awesome [DiT](https://github.com/facebookresearch/DiT) and [DeepSeek-MoE](https://github.com/deepseek-ai/DeepSeek-MoE) repos. 
 
