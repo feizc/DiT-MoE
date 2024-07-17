@@ -16,10 +16,10 @@ DiT-MoE as a sparse version of the diffusion Transformer, is scalable and compet
 
 ### To-do list
 
-- [] training / inference scripts
-- [] huggingface ckpts
-- [] experts routing analysis
-- [] synthesized data
+- [ ] training / inference scripts
+- [ ] huggingface ckpts
+- [ ] experts routing analysis
+- [ ] synthesized data
 
 ### 1. Training 
 
