@@ -141,7 +141,9 @@ def main(args):
     latent_size = args.image_size // 8
     model = DiT_models[args.model](
         input_size=latent_size,
-        num_classes=args.num_classes
+        num_classes=args.num_classes,
+        num_experts=args.num_experts, 
+        num_experts_per_tok=args.num_experts_per_tok,
     )
 
     if args.resume is not None: 
@@ -156,8 +158,7 @@ def main(args):
     # model = DDP(model.to(device), device_ids=[rank])
     model = DDP(model.to(device), device_ids=[device])
     diffusion = create_diffusion(timestep_respacing="")  # default: 1000 steps, linear noise schedule 
-    vae_path = '/maindata/data/shared/multimodal/zhengcong.fei/ckpts/sd-vae-ft-mse'
-    vae = AutoencoderKL.from_pretrained(vae_path).to(device)
+    vae = AutoencoderKL.from_pretrained(args.vae_path).to(device)
     logger.info(f"DiT Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     # Setup optimizer (we used default Adam betas=(0.9, 0.999) and a constant learning rate of 1e-4 in our paper):
@@ -268,16 +269,18 @@ if __name__ == "__main__":
     parser.add_argument("--data-path", type=str, required=True)
     parser.add_argument("--results-dir", type=str, default="results")
     parser.add_argument("--resume", type=str, default=None)
-    parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-L/2")
+    parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-S/2")
+    parser.add_argument("--vae-path", type=str, default='/maindata/data/shared/multimodal/zhengcong.fei/ckpts/sd-vae-ft-mse')
     parser.add_argument("--image-size", type=int, choices=[256, 512], default=256)
     parser.add_argument("--num-classes", type=int, default=1000)
-    parser.add_argument("--epochs", type=int, default=1400)
+    parser.add_argument("--epochs", type=int, default=1400) 
     parser.add_argument("--global-batch-size", type=int, default=64)
-    parser.add_argument("--global-seed", type=int, default=12)
-    parser.add_argument("--vae", type=str, choices=["ema", "mse"], default="ema")  # Choice doesn't affect training
+    parser.add_argument("--global-seed", type=int, default=1234) 
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--log-every", type=int, default=100)
-    parser.add_argument('--accum_iter', default=16, type=int,) 
+    parser.add_argument('--accum_iter', default=8, type=int,)  
+    parser.add_argument('--num_experts', default=8, type=int,) 
+    parser.add_argument('--num_experts_per_tok', default=2, type=int,) 
     parser.add_argument("--ckpt-every", type=int, default=50_000)
     args = parser.parse_args()
-    main(args)
+    main(args) 

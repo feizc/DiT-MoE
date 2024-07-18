@@ -19,7 +19,7 @@ def calculate_params_and_flops():
         num_classes=num_classes,
         num_experts=16, 
         num_experts_per_tok=2,
-    ).to(device)
+    ).to(device).half()
 
     if ckpt_path is not None: 
         state_dict = find_model(ckpt_path)
@@ -28,12 +28,13 @@ def calculate_params_and_flops():
     model.eval() 
 
     print(f"DiT Parameters: {sum(p.numel() for p in model.parameters()):,}")
-    x = torch.randn(1, 4, 32, 32).cuda()
-    t = torch.randint(1, 1000, (1,)).cuda()
+    x = torch.randn(1, 4, 32, 32).cuda().half()
+    t = torch.randint(1, 1000, (1,)).cuda().half()
     y = torch.randint(1, 1000, (1,)).cuda()
-    flops, _ = profile(model, inputs=(x, t, y)) 
+    with torch.no_grad():
+        flops, _ = profile(model, inputs=(x, t, y)) 
     print('FLOPs = ' + str(flops * 2/1000**3) + 'G')
-    # plot for expert routing 
+
     
 
 def image_class_expert_ratio(): 
@@ -45,7 +46,7 @@ def image_class_expert_ratio():
     model = "DiT-S/2" 
     num_classes = 1000 
     device = "cuda" 
-    ckpt_path = "results/002-DiT-S-2/checkpoints/1700000.pt" 
+    ckpt_path = "results/002-DiT-S-2/checkpoints/ckpt.pt" 
     num_sampling_steps = 250 
     cfg_scale = 4.0 
     every_class_sample = 50
@@ -103,5 +104,17 @@ def image_class_expert_ratio():
         
 
 
+def ckpts_clean(): 
+    # only save ema ckpts for ckpt uploading 
+    ckpt_path = 'results/003-DiT-B-2/checkpoints/ckpt.pt' 
+    checkpoint = torch.load(ckpt_path, map_location=lambda storage, loc: storage) 
+    new_checkpoint = {
+                        "ema": checkpoint['ema'],
+                    }
+    torch.save(new_checkpoint, 'ckpt_clean.pt')
+
+
+
 # image_class_expert_ratio()
-calculate_params_and_flops() 
+# calculate_params_and_flops() 
+ckpts_clean()

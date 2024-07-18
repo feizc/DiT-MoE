@@ -33,14 +33,17 @@ def main(args):
     latent_size = args.image_size // 8
     model = DiT_models[args.model](
         input_size=latent_size,
-        num_classes=args.num_classes
+        num_classes=args.num_classes,
+        num_experts=args.num_experts, 
+        num_experts_per_tok=args.num_experts_per_tok,
     ).to(device)
     # Auto-download a pre-trained model or load a custom DiT checkpoint from train.py:
     
     if args.model == "DiT-S/2":
-        ckpt_path = "results/002-DiT-S-2/checkpoints/1700000.pt" 
+        ckpt_path = "results/002-DiT-S-2/checkpoints/ckpt.pt" 
     else:
-        ckpt_path = "results/003-DiT-B-2/checkpoints/0400000.pt" 
+        # ckpt_path = "results/003-DiT-B-2/checkpoints/0750000.pt" 
+        ckpt_path = "ckpt_clean.pt"
 
     state_dict = find_model(ckpt_path)
     model.load_state_dict(state_dict)
@@ -83,6 +86,8 @@ if __name__ == "__main__":
     parser.add_argument("--image-size", type=int, choices=[256, 512], default=256)
     parser.add_argument("--num-classes", type=int, default=1000)
     parser.add_argument("--cfg-scale", type=float, default=4.0)
+    parser.add_argument('--num_experts', default=8, type=int,) 
+    parser.add_argument('--num_experts_per_tok', default=2, type=int,) 
     parser.add_argument("--num-sampling-steps", type=int, default=250)
     parser.add_argument("--seed", type=int, default=22)
     parser.add_argument("--ckpt", type=str, default=None,
