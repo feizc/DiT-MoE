@@ -84,7 +84,7 @@ We are processing it as soon as possible, the model weights and data will be rel
 ### 4. Expert Specialization Analysis Tools
 
 We provide all the analysis scripts used in the paper.  
-You can use [`data_sample.py`](analysis/data_sample.py) to sample data points towards experts ids across different class-conditional. Then, 
+You can use [`expert_data.py`](analysis/expert_data.py) to sample data points towards experts ids across different class-conditional. Then, 
 the headmap.py is used to viasualize frequency for different scenarios. 
 
 
