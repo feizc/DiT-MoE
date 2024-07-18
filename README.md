@@ -23,14 +23,20 @@ DiT-MoE as a sparse version of the diffusion Transformer, is scalable and compet
 
 ### 1. Training 
 
+You can refer to the [link](https://github.com/facebookresearch/DiT/blob/main/environment.yml) to build the running environment.
+
 To launch DiT-MoE-S/2 (256x256) in the latent space training with `N` GPUs on one node with pytorch DDP:
 ```bash
 torchrun --nnodes=1 --nproc_per_node=N train.py \
 --model DiT-S/2 \
+--num_experts 8 \
+--num_experts_per_tok 2 \
 --data-path /path/to/imagenet/train \
 --image-size 256 \
---global-batch-size 256
+--global-batch-size 256 \
+--vae-path /path/to/vae
 ```
+
 
 For multiple node training, we solve the [bug](https://github.com/facebookresearch/DiT/blob/main/train.py#L149) at original DiT repository, and you can run with 8 nodes as: 
 ```bash
@@ -41,13 +47,15 @@ torchrun --nnodes=8 \
     --master_port=1234 \
     train.py \
     --model DiT-B/2 \
+    --num_experts 8 \
+    --num_experts_per_tok 2 \
     --global-batch-size 1024 \
-    --data-path /path/to/imagenet/train
+    --data-path /path/to/imagenet/train \
+    --vae-path /path/to/vae
 ```
 
 
 ### 2. Inference 
-
 
 We include a [`sample.py`](sample.py) script which samples images from a DiT-MoE model. 
 ```bash
@@ -61,6 +69,8 @@ python sample.py \
 
 ### 3. Download Models and Data 
 
+We are processing it as soon as possible, the model weights and data will be released within two weeks :) 
+
 | DiT-MoE Model     | Image Resolution | Url | 
 |---------------|------------------|---------|
 | DiT-MoE-S/2-8E2A | 256x256          | -   | 
@@ -72,6 +82,10 @@ python sample.py \
 
 
 ### 4. Expert Specialization Analysis Tools
+
+We provide all the analysis scripts used in the paper.  
+You can use [`data_sample.py`](analysis/data_sample.py) to sample data points towards experts ids across different class-conditional. Then, 
+the headmap.py is used to viasualize frequency for different scenarios. 
 
 
 ### 5. BibTeX
