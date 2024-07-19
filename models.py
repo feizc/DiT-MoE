@@ -17,6 +17,18 @@ from timm.models.vision_transformer import PatchEmbed, Attention, Mlp
 
 import torch.nn.functional as F
 
+try:
+    import flash_attn
+    if hasattr(flash_attn, '__version__') and int(flash_attn.__version__[0]) == 2:
+        from flash_attn.flash_attn_interface import flash_attn_kvpacked_func
+        from flash_attn.modules.mha import FlashSelfAttention 
+    else:
+        from flash_attn.flash_attn_interface import flash_attn_unpadded_kvpacked_func
+        from flash_attn.modules.mha import FlashSelfAttention
+except Exception as e:
+    print(f'flash_attn import failed: {e}')
+
+
 
 # selected_ids_list = []
 
@@ -66,8 +78,8 @@ class TimestepEmbedder(nn.Module):
         return embedding 
 
     def forward(self, t):
-        t_freq = self.timestep_embedding(t, self.frequency_embedding_size)
-        t_emb = self.mlp(t_freq)
+        t_freq = self.timestep_embedding(t, self.frequency_embedding_size) 
+        t_emb = self.mlp(t_freq)#.half())
         return t_emb
 
 
@@ -104,8 +116,6 @@ class LabelEmbedder(nn.Module):
 #################################################################################
 #                                MoE Layer.                                     #
 #################################################################################
-
-
 
 
 class MoEGate(nn.Module):
@@ -193,7 +203,7 @@ class AddAuxiliaryLoss(torch.autograd.Function):
 
 
 class MoeMLP(nn.Module):
-    def __init__(self, hidden_size, intermediate_size):
+    def __init__(self, hidden_size, intermediate_size, pretraining_tp=2):
         super().__init__()
 
         self.hidden_size = hidden_size
@@ -202,13 +212,14 @@ class MoeMLP(nn.Module):
         self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
         self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=False)
         self.act_fn = nn.SiLU()
-        self.pretraining_tp = 2
+        self.pretraining_tp = pretraining_tp
 
     def forward(self, x):
         if self.pretraining_tp > 1:
             slice = self.intermediate_size // self.pretraining_tp
             gate_proj_slices = self.gate_proj.weight.split(slice, dim=0)
-            up_proj_slices = self.up_proj.weight.split(slice, dim=0)
+            up_proj_slices = self.up_proj.weight.split(slice, dim=0) 
+            # print(self.up_proj.weight.size(), self.down_proj.weight.size())
             down_proj_slices = self.down_proj.weight.split(slice, dim=1)
 
             gate_proj = torch.cat(
@@ -231,16 +242,16 @@ class SparseMoeBlock(nn.Module):
     """
     A mixed expert module containing shared experts.
     """
-    def __init__(self, embed_dim, mlp_ratio=4, num_experts=16, num_experts_per_tok=2):
+    def __init__(self, embed_dim, mlp_ratio=4, num_experts=16, num_experts_per_tok=2, pretraining_tp=2):
         super().__init__()
         self.num_experts_per_tok = num_experts_per_tok
-        self.experts = nn.ModuleList([MoeMLP(hidden_size = embed_dim, intermediate_size = mlp_ratio * embed_dim) for i in range(num_experts)])
+        self.experts = nn.ModuleList([MoeMLP(hidden_size = embed_dim, intermediate_size = mlp_ratio * embed_dim, pretraining_tp=pretraining_tp) for i in range(num_experts)])
         self.gate = MoEGate(embed_dim=embed_dim, num_experts=num_experts, num_experts_per_tok=num_experts_per_tok)
         self.n_shared_experts = 2
         
         if self.n_shared_experts is not None:
             intermediate_size =  embed_dim * self.n_shared_experts
-            self.shared_experts = MoeMLP(hidden_size = embed_dim, intermediate_size = intermediate_size)
+            self.shared_experts = MoeMLP(hidden_size = embed_dim, intermediate_size = intermediate_size, pretraining_tp=pretraining_tp)
     
     def forward(self, hidden_states):
         identity = hidden_states
@@ -254,9 +265,9 @@ class SparseMoeBlock(nn.Module):
         flat_topk_idx = topk_idx.view(-1)
         if self.training:
             hidden_states = hidden_states.repeat_interleave(self.num_experts_per_tok, dim=0)
-            y = torch.empty_like(hidden_states)
-            for i, expert in enumerate(self.experts):
-                y[flat_topk_idx == i] = expert(hidden_states[flat_topk_idx == i])
+            y = torch.empty_like(hidden_states, dtype=hidden_states.dtype)
+            for i, expert in enumerate(self.experts): 
+                y[flat_topk_idx == i] = expert(hidden_states[flat_topk_idx == i]).float()
             y = (y.view(*topk_weight.shape, -1) * topk_weight.unsqueeze(-1)).sum(dim=1)
             y =  y.view(*orig_shape)
             y = AddAuxiliaryLoss.apply(y, aux_loss)
@@ -306,6 +317,64 @@ class RMSNorm(nn.Module):
 
 
 #################################################################################
+#                              Flash attention Layer.                           #
+#################################################################################
+
+class FlashSelfMHAModified(nn.Module):
+    """
+    self-attention with flashattention
+    """
+    def __init__(self,
+                 dim,
+                 num_heads,
+                 qkv_bias=True,
+                 qk_norm=False,
+                 attn_drop=0.0,
+                 proj_drop=0.0,
+                 device=None,
+                 dtype=None,
+                 norm_layer=nn.LayerNorm,
+                 ):
+        factory_kwargs = {'device': device, 'dtype': dtype}
+        super().__init__()
+        self.dim = dim
+        self.num_heads = num_heads
+        assert self.dim % num_heads == 0, "self.kdim must be divisible by num_heads"
+        self.head_dim = self.dim // num_heads
+        assert self.head_dim % 8 == 0 and self.head_dim <= 128, "Only support head_dim <= 128 and divisible by 8"
+
+        self.Wqkv = nn.Linear(dim, 3 * dim, bias=qkv_bias, **factory_kwargs)
+        # TODO: eps should be 1 / 65530 if using fp16
+        self.q_norm = norm_layer(self.head_dim, elementwise_affine=True, eps=1e-6) if qk_norm else nn.Identity()
+        self.k_norm = norm_layer(self.head_dim, elementwise_affine=True, eps=1e-6) if qk_norm else nn.Identity()
+        self.inner_attn = FlashSelfAttention(attention_dropout=attn_drop)
+        self.out_proj = nn.Linear(dim, dim, bias=qkv_bias, **factory_kwargs)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(self, x,):
+        """
+        Parameters
+        ----------
+        x: torch.Tensor
+            (batch, seqlen, hidden_dim) (where hidden_dim = num heads * head dim)
+        """
+        b, s, d = x.shape
+
+        qkv = self.Wqkv(x)
+        qkv = qkv.view(b, s, 3, self.num_heads, self.head_dim)  # [b, s, 3, h, d]
+        q, k, v = qkv.unbind(dim=2) # [b, s, h, d]
+        q = self.q_norm(q).half()   # [b, s, h, d]
+        k = self.k_norm(k).half()
+
+        qkv = torch.stack([q, k, v], dim=2)     # [b, s, 3, h, d]
+        context = self.inner_attn(qkv)
+        out = self.out_proj(context.view(b, s, d))
+        out = self.proj_drop(out)
+
+        return out
+
+
+#################################################################################
 #                                 Core DiT Model                                #
 #################################################################################
 
@@ -315,16 +384,20 @@ class DiTBlock(nn.Module):
     """
     def __init__(
         self, hidden_size, num_heads, mlp_ratio=4,
-        num_experts=8, num_experts_per_tok=2, **block_kwargs
+        num_experts=8, num_experts_per_tok=2, pretraining_tp=2, 
+        use_flash_attn=False, **block_kwargs
     ):
         super().__init__()
         self.norm1 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
-        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
+        if use_flash_attn: 
+            self.attn = FlashSelfMHAModified(hidden_size, num_heads=num_heads, qkv_bias=True, qk_norm=True)
+        else:
+            self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
         self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
         approx_gelu = lambda: nn.GELU(approximate="tanh")
         # self.mlp = Mlp(in_features=hidden_size, hidden_features=mlp_hidden_dim, act_layer=approx_gelu, drop=0) 
-        self.moe = SparseMoeBlock(hidden_size, mlp_ratio, num_experts, num_experts_per_tok)
+        self.moe = SparseMoeBlock(hidden_size, mlp_ratio, num_experts, num_experts_per_tok, pretraining_tp)
 
         self.adaLN_modulation = nn.Sequential(
             nn.SiLU(),
@@ -374,7 +447,9 @@ class DiT(nn.Module):
         class_dropout_prob=0.1,
         num_classes=1000,
         num_experts=8, num_experts_per_tok=2,
+        pretraining_tp=2,
         learn_sigma=True,
+        use_flash_attn=False,
     ):
         super().__init__()
         self.learn_sigma = learn_sigma
@@ -391,7 +466,7 @@ class DiT(nn.Module):
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, hidden_size), requires_grad=False)
 
         self.blocks = nn.ModuleList([
-            DiTBlock(hidden_size, num_heads, mlp_ratio, num_experts, num_experts_per_tok, ) for _ in range(depth)
+            DiTBlock(hidden_size, num_heads, mlp_ratio, num_experts, num_experts_per_tok, pretraining_tp, use_flash_attn) for _ in range(depth)
         ])
         self.final_layer = FinalLayer(hidden_size, patch_size, self.out_channels)
         self.initialize_weights()
@@ -454,6 +529,8 @@ class DiT(nn.Module):
         t: (N,) tensor of diffusion timesteps
         y: (N,) tensor of class labels
         """
+        #x = x.half()
+        # t = t.half()
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
         t = self.t_embedder(t)                   # (N, D)
         y = self.y_embedder(y, self.training)    # (N, D)
@@ -480,7 +557,8 @@ class DiT(nn.Module):
         cond_eps, uncond_eps = torch.split(eps, len(eps) // 2, dim=0)
         half_eps = uncond_eps + cfg_scale * (cond_eps - uncond_eps)
         eps = torch.cat([half_eps, half_eps], dim=0)
-        return torch.cat([eps, rest], dim=1)
+        return torch.cat([eps, rest], dim=1) 
+    
 
 
 #################################################################################
