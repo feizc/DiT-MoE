@@ -11,14 +11,14 @@ DiT-MoE as a sparse version of the diffusion Transformer, is scalable and compet
 * 🪐 A PyTorch [implementation](models.py) of DiT-MoE
 * ⚡️ Pre-trained checkpoints in paper
 * 💥 A [sampling script](sample.py) for running pre-trained DiT-MoE 
-* 🛸 A DiT-MoE training script using PyTorch [DDP](train.py) and FSDP
+* 🛸 A DiT-MoE training script using PyTorch [DDP](train.py) and [deepspeed](train_deepspeed.py)
 
 
 ### To-do list
 
-- [ ] training / inference scripts
+- [x] training / inference scripts
+- [x] experts routing analysis
 - [ ] huggingface ckpts
-- [ ] experts routing analysis
 - [ ] synthesized data
 
 ### 1. Training 
@@ -53,6 +53,20 @@ torchrun --nnodes=8 \
     --data-path /path/to/imagenet/train \
     --vae-path /path/to/vae
 ```
+
+
+For larger model size training, we recommand to use deepspeed with flash attention scripts, and different stage settings including zero 2 and zero3 can be seen in config file. 
+You can run as:
+```bash
+python -m torch.distributed.launch --nnodes=1 --nproc_per_node=8 train_deepspeed.py \
+--deepspeed_config config/zero2.json \
+--model DiT-XL/2 \
+--num_experts 8 \
+--num_experts_per_tok 2 \
+--data-path /maindata/data/shared/multimodal/public/dataset_img_only/imagenet/data/train \
+--train_batch_size 32
+```
+
 
 
 ### 2. Inference 
