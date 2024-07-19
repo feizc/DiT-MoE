@@ -55,7 +55,7 @@ torchrun --nnodes=8 \
 ```
 
 
-For larger model size training, we recommand to use deepspeed with flash attention scripts, and different stage settings including zero 2 and zero3 can be seen in config file. 
+For larger model size training, we recommand to use deepspeed with flash attention scripts, and different stage settings including zero2 and zero3 can be seen in config file. 
 You can run as:
 ```bash
 python -m torch.distributed.launch --nnodes=1 --nproc_per_node=8 train_deepspeed.py \
