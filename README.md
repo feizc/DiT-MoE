@@ -63,7 +63,8 @@ python -m torch.distributed.launch --nnodes=1 --nproc_per_node=8 train_deepspeed
 --model DiT-XL/2 \
 --num_experts 8 \
 --num_experts_per_tok 2 \
---data-path /maindata/data/shared/multimodal/public/dataset_img_only/imagenet/data/train \
+--data-path /path/to/imagenet/train \
+--vae-path /path/to/vae \
 --train_batch_size 32
 ```
 
