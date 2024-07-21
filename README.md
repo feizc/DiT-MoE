@@ -75,8 +75,9 @@ python -m torch.distributed.launch --nnodes=1 --nproc_per_node=8 train_deepspeed
 We include a [`sample.py`](sample.py) script which samples images from a DiT-MoE model. 
 ```bash
 python sample.py \
---model DiT-S/2 \
+--model DiT-XL/2 \
 --ckpt /path/to/model \
+--vae-path /path/to/vae \
 --image-size 256 \
 --cfg-scale 1.5
 ```
