@@ -292,7 +292,10 @@ class SparseMoeBlock(nn.Module):
             exp_token_idx = token_idxs[start_idx:end_idx]
             expert_tokens = x[exp_token_idx]
             expert_out = expert(expert_tokens)
-            expert_out.mul_(flat_expert_weights[idxs[start_idx:end_idx]])
+            expert_out.mul_(flat_expert_weights[idxs[start_idx:end_idx]]) 
+            
+            # for fp16 and other dtype
+            expert_cache = expert_cache.to(expert_out.dtype)
             expert_cache.scatter_reduce_(0, exp_token_idx.view(-1, 1).repeat(1, x.shape[-1]), expert_out, reduce='sum')
         return expert_cache
 

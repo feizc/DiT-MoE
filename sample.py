@@ -24,33 +24,53 @@ def main(args):
     torch.set_grad_enabled(False)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    if args.ckpt is None:
-        # assert args.model == "DiT-XL/2", "Only DiT-XL/2 models are available for auto-download."
-        assert args.image_size in [256, 512]
-        assert args.num_classes == 1000
+    assert args.image_size in [256, 512]
+    assert args.num_classes == 1000
 
     # Load model:
-    latent_size = args.image_size // 8
+    latent_size = args.image_size // 8 
+
+    if args.model == "DiT-XL/2" or args.model == "DiT-G/2": 
+        pretraining_tp=1
+        use_flash_attn=True 
+        dtype = torch.float16
+    else:
+        pretraining_tp=2
+        use_flash_attn=False 
+        dtype = torch.float32
+
     model = DiT_models[args.model](
         input_size=latent_size,
         num_classes=args.num_classes,
         num_experts=args.num_experts, 
         num_experts_per_tok=args.num_experts_per_tok,
+        pretraining_tp=pretraining_tp,
+        use_flash_attn=use_flash_attn
     ).to(device)
+
+    if dtype == torch.float16:
+        model = model.half()
     # Auto-download a pre-trained model or load a custom DiT checkpoint from train.py:
     
-    if args.model == "DiT-S/2":
-        # ckpt_path = "results/002-DiT-S-2/checkpoints/ckpt.pt" 
-        ckpt_path = "results/deepspeed-DiT-S-2/checkpoints/0000001.pt"
+    if args.ckpt is None: 
+        print('only for testing middle ckpts')
+        if args.model == "DiT-S/2":
+            ckpt_path = "results/002-DiT-S-2/checkpoints/ckpt.pt" 
+        elif args.model == "DiT-B/2":
+            ckpt_path = "results/003-DiT-B-2/checkpoints/ckpt.pt" 
+        elif args.model == "DiT-XL/2": 
+            ckpt_path = "results/deepspeed-DiT-XL-2/checkpoints/ckpt.pt" 
+        else:
+            pass 
     else:
-        ckpt_path = "results/003-DiT-B-2/checkpoints/0750000.pt" 
+        ckpt_path = args.ckpt 
+
 
     state_dict = find_model(ckpt_path)
     model.load_state_dict(state_dict)
     model.eval()  # important!
     diffusion = create_diffusion(str(args.num_sampling_steps))
-    vae_path = '/maindata/data/shared/multimodal/zhengcong.fei/ckpts/sd-vae-ft-mse'
-    vae = AutoencoderKL.from_pretrained(vae_path).to(device) 
+    vae = AutoencoderKL.from_pretrained(args.vae_path).to(device) 
     
     # Labels to condition the model with (feel free to change):
     class_labels = [207, 360, 387, 974, 88, 979, 417, 279]
@@ -66,23 +86,34 @@ def main(args):
     y = torch.cat([y, y_null], 0)
     model_kwargs = dict(y=y, cfg_scale=args.cfg_scale)
 
-    # Sample images:
-    samples = diffusion.p_sample_loop(
-        model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device
-    )
+    if dtype == torch.float16: 
+        with torch.autocast(device_type='cuda'):
+            samples = diffusion.p_sample_loop(
+                model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device
+            )
+    else:
+        samples = diffusion.p_sample_loop(
+                model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device
+            )
+    
     samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
     samples = vae.decode(samples / 0.18215).sample
 
     # Save and display images: 
     if args.model == "DiT-S/2":
         save_image(samples, "sample_s.png", nrow=4, normalize=True, value_range=(-1, 1))
-    else:
+    elif args.model == "DiT-B/2":
         save_image(samples, "sample_b.png", nrow=4, normalize=True, value_range=(-1, 1))
+    elif args.model == "DiT-XL/2":
+        save_image(samples, "sample_xl.png", nrow=4, normalize=True, value_range=(-1, 1)) 
+    else:
+        pass
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-S/2")
-    parser.add_argument("--vae", type=str, choices=["ema", "mse"], default="mse")
+    parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-XL/2")
+    parser.add_argument("--vae-path", type=str, default="/maindata/data/shared/multimodal/zhengcong.fei/ckpts/sd-vae-ft-mse")
     parser.add_argument("--image-size", type=int, choices=[256, 512], default=256)
     parser.add_argument("--num-classes", type=int, default=1000)
     parser.add_argument("--cfg-scale", type=float, default=4.0)
@@ -90,7 +121,6 @@ if __name__ == "__main__":
     parser.add_argument('--num_experts_per_tok', default=2, type=int,) 
     parser.add_argument("--num-sampling-steps", type=int, default=250)
     parser.add_argument("--seed", type=int, default=22)
-    parser.add_argument("--ckpt", type=str, default=None,
-                        help="Optional path to a DiT checkpoint (default: auto-download a pre-trained DiT-XL/2 model).")
+    parser.add_argument("--ckpt", type=str, default=None, )
     args = parser.parse_args()
     main(args)
