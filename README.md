@@ -68,11 +68,11 @@ python -m torch.distributed.launch --nnodes=1 --nproc_per_node=8 train_deepspeed
 --train_batch_size 32
 ```
 
-
+We also provide all shell scripts for different model size training in file folder *scripts*. 
 
 ### 2. Inference 
 
-We include a [`sample.py`](sample.py) script which samples images from a DiT-MoE model. 
+We include a [`sample.py`](sample.py) script which samples images from a DiT-MoE model. Take care that we use torch.float16 for large model inference. 
 ```bash
 python sample.py \
 --model DiT-XL/2 \
@@ -85,16 +85,19 @@ python sample.py \
 
 ### 3. Download Models and Data 
 
-We are processing it as soon as possible, the model weights and data will be released within two weeks :) 
+We are processing it as soon as possible, the model weights, data and used scripts for results reproduce will be released within two weeks continuously :) 
 
-| DiT-MoE Model     | Image Resolution | Url | 
-|---------------|------------------|---------|
-| DiT-MoE-S/2-8E2A | 256x256          | -   | 
-| DiT-MoE-S/2-16E2A | 256x256         | -   | 
-| DiT-MoE-B/2-8E2A | 256x256         | -   | 
-| DiT-MoE-XL/2-8E2A | 256x256         | -   | 
-| DiT-MoE-XL/2-8E2A | 512x512         | -   | 
-| DiT-MoE-G/2-16E2A | 512x512         | -   | 
+We use sd vae in this [link](https://huggingface.co/feizhengcong/DiT-MoE/tree/main/sd-vae-ft-mse). 
+
+
+| DiT-MoE Model     | Image Resolution | Url | Scripts |
+|---------------|------------------|---------|---------|
+| DiT-MoE-S/2-8E2A | 256x256          | [link](https://huggingface.co/feizhengcong/DiT-MoE/blob/main/dit_moe_s_8E2A.pt)  | - | 
+| DiT-MoE-S/2-16E2A | 256x256         | -   | -|
+| DiT-MoE-B/2-8E2A | 256x256         | [link](https://huggingface.co/feizhengcong/DiT-MoE/blob/main/dit_moe_b_8E2A.pt)  | -|
+| DiT-MoE-XL/2-8E2A | 256x256         | -   | -|
+| DiT-MoE-XL/2-8E2A | 512x512         | -   | -|
+| DiT-MoE-G/2-16E2A | 512x512         | -   | -|
 
 
 ### 4. Expert Specialization Analysis Tools
