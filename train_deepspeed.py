@@ -31,8 +31,8 @@ from models import DiT_models
 from diffusion import create_diffusion
 from diffusers.models import AutoencoderKL
 from download import find_model
-
 import deepspeed
+from deepspeed.utils import safe_get_full_fp32_param
 
 #################################################################################
 #                             Training Helper Functions                         #
@@ -113,13 +113,13 @@ def main(args):
     print(f"Starting rank={rank}, seed={seed}, world_size={dist.get_world_size()}.")
     
 
-    # Setup an experiment folder:
+    # Setup an experiment folder 
+    model_string_name = args.model.replace("/", "-")  # e.g., DiT-XL/2 --> DiT-XL-2 (for naming folders)
+    experiment_dir = f"{args.results_dir}/deepspeed-{model_string_name}"  # Create an experiment folder
+    checkpoint_dir = f"{experiment_dir}/checkpoints"  # Stores saved model checkpoints
+    
     if rank == 0:
         os.makedirs(args.results_dir, exist_ok=True)  # Make results folder (holds all experiment subfolders)
-        experiment_index = len(glob(f"{args.results_dir}/*"))
-        model_string_name = args.model.replace("/", "-")  # e.g., DiT-XL/2 --> DiT-XL-2 (for naming folders)
-        experiment_dir = f"{args.results_dir}/deepspeed-{model_string_name}"  # Create an experiment folder
-        checkpoint_dir = f"{experiment_dir}/checkpoints"  # Stores saved model checkpoints
         os.makedirs(checkpoint_dir, exist_ok=True)
         logger = create_logger(experiment_dir)
         logger.info(f"Experiment directory created at {experiment_dir}")
@@ -223,16 +223,21 @@ def main(args):
                 start_time = time()
 
             # Save DiT checkpoint:
-            if train_steps % args.ckpt_every == 0 and train_steps > 0:
-                if rank == 0:
-                    checkpoint = {
-                        "model": model.state_dict(),
-                        "opt": opt.state_dict(),
-                        "args": args
-                    }
-                    checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}.pt"
-                    torch.save(checkpoint, checkpoint_path)
-                    logger.info(f"Saved checkpoint to {checkpoint_path}")
+            if train_steps % args.ckpt_every == 0 and train_steps > 0:  
+                # zero3 should parameter gathering                   
+                if  'zero3' in args.deepspeed_config: 
+                    checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}"
+                    model_engine.save_checkpoint(checkpoint_path) 
+                else: 
+                    if rank == 0:
+                        checkpoint = {
+                            "model": model.state_dict(),
+                            "opt": opt.state_dict(),
+                            "args": args
+                        }
+                        checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}.pt"
+                        torch.save(checkpoint, checkpoint_path)
+                        logger.info(f"Saved checkpoint to {checkpoint_path}")
                 dist.barrier()
 
     # model.eval()  # important! This disables randomized embedding dropout
@@ -257,7 +262,7 @@ if __name__ == "__main__":
     parser.add_argument('--accum_iter', default=8, type=int,)  
     parser.add_argument('--num_experts', default=8, type=int,) 
     parser.add_argument('--num_experts_per_tok', default=2, type=int,) 
-    parser.add_argument("--ckpt-every", type=int, default=50_000) 
+    parser.add_argument("--ckpt-every", type=int, default=10_000) 
     parser.add_argument('--local-rank', type=int, default=-1, help='local rank passed from distributed launcher') 
     parser = deepspeed.add_config_arguments(parser)
     args = parser.parse_args() 

@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 """
-Sample new images from a pre-trained DiT.
+Sample new images from a pre-trained DiT-MoE.
 """
 import torch
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -16,6 +16,7 @@ from diffusers.models import AutoencoderKL
 from download import find_model
 from models import DiT_models
 import argparse
+
 
 
 def main(args):
@@ -55,13 +56,13 @@ def main(args):
     if args.ckpt is None: 
         print('only for testing middle ckpts')
         if args.model == "DiT-S/2":
-            ckpt_path = "results/002-DiT-S-2/checkpoints/ckpt.pt" 
+            ckpt_path = "dit_moe_s_8E2A.pt" 
         elif args.model == "DiT-B/2":
-            ckpt_path = "results/003-DiT-B-2/checkpoints/ckpt.pt" 
+            ckpt_path = "dit_moe_b_8E2A.pt" 
         elif args.model == "DiT-XL/2": 
             ckpt_path = "results/deepspeed-DiT-XL-2/checkpoints/ckpt.pt" 
-        else:
-            pass 
+        else: 
+            ckpt_path = "results/deepspeed-DiT-G-2/checkpoints/ckpt.pt" 
     else:
         ckpt_path = args.ckpt 
 
@@ -107,7 +108,7 @@ def main(args):
     elif args.model == "DiT-XL/2":
         save_image(samples, "sample_xl.png", nrow=4, normalize=True, value_range=(-1, 1)) 
     else:
-        pass
+        save_image(samples, "sample_g.png", nrow=4, normalize=True, value_range=(-1, 1)) 
 
 
 if __name__ == "__main__":
@@ -120,7 +121,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_experts', default=8, type=int,) 
     parser.add_argument('--num_experts_per_tok', default=2, type=int,) 
     parser.add_argument("--num-sampling-steps", type=int, default=250)
-    parser.add_argument("--seed", type=int, default=22)
+    parser.add_argument("--seed", type=int, default=2024)
     parser.add_argument("--ckpt", type=str, default=None, )
     args = parser.parse_args()
     main(args)
