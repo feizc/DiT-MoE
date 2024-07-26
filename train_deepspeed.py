@@ -223,21 +223,9 @@ def main(args):
                 start_time = time()
 
             # Save DiT checkpoint:
-            if train_steps % args.ckpt_every == 0 and train_steps > 0:  
-                # zero3 should parameter gathering                   
-                if  'zero3' in args.deepspeed_config: 
-                    checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}"
-                    model_engine.save_checkpoint(checkpoint_path) 
-                else: 
-                    if rank == 0:
-                        checkpoint = {
-                            "model": model.state_dict(),
-                            "opt": opt.state_dict(),
-                            "args": args
-                        }
-                        checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}.pt"
-                        torch.save(checkpoint, checkpoint_path)
-                        logger.info(f"Saved checkpoint to {checkpoint_path}")
+            if train_steps % args.ckpt_every == 0 and train_steps > 0:                 
+                checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}"
+                model_engine.save_checkpoint(checkpoint_path) 
                 dist.barrier()
 
     # model.eval()  # important! This disables randomized embedding dropout
