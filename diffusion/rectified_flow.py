@@ -1,11 +1,16 @@
 import torch 
+from torch.nn.parallel import DistributedDataParallel as DDP 
 
 class RectifiedFlow(torch.nn.Module):
     def __init__(self, model, ln=True):
         super().__init__()
         self.model = model
         self.ln = ln
-        self.stratified = False
+        self.stratified = False 
+        if isinstance(model, DDP):
+            self.learn_sigma = model.module.learn_sigma 
+        else:
+            self.learn_sigma = model.learn_sigma 
 
     def forward(self, x, cond):
 
@@ -31,7 +36,7 @@ class RectifiedFlow(torch.nn.Module):
         # make t, zt into same dtype as x
         zt, t = zt.to(x.dtype), t.to(x.dtype)
         vtheta = self.model(zt, t, cond) 
-        if self.model.learn_sigma == True: 
+        if self.learn_sigma == True: 
             vtheta, _ = vtheta.chunk(2, dim=1) 
         batchwise_mse = ((z1 - x - vtheta) ** 2).mean(dim=list(range(1, len(x.shape))))
         tlist = batchwise_mse.detach().cpu().reshape(-1).tolist()
@@ -49,11 +54,11 @@ class RectifiedFlow(torch.nn.Module):
             t = torch.tensor([t] * b).to(z.device)
 
             vc = self.model(z, t, cond) 
-            if self.model.learn_sigma == True: 
+            if self.learn_sigma == True: 
                 vc, _ = vc.chunk(2, dim=1) 
             if null_cond is not None:
                 vu = self.model(z, t, null_cond) 
-                if self.model.learn_sigma == True: 
+                if self.learn_sigma == True: 
                     vu, _ = vu.chunk(2, dim=1) 
                 vc = vu + cfg * (vc - vu)
 
@@ -72,11 +77,11 @@ class RectifiedFlow(torch.nn.Module):
             t = torch.tensor([t] * b).to(z.device)
 
             vc = self.model(z, t, cond) 
-            if self.model.learn_sigma == True: 
+            if self.learn_sigma == True: 
                 vc, _ = vc.chunk(2, dim=1)  
             if null_cond is not None:
                 vu = self.model(z, t, null_cond) 
-                if self.model.learn_sigma == True: 
+                if self.learn_sigma == True: 
                     vu, _ = vu.chunk(2, dim=1) 
                 vc = vu + cfg * (vc - vu)
             x = z - i * dt * vc

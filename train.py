@@ -28,7 +28,8 @@ import logging
 import os
 
 from models import DiT_models
-from diffusion import create_diffusion
+from diffusion import create_diffusion 
+from diffusion.rectified_flow import RectifiedFlow
 from diffusers.models import AutoencoderKL
 from download import find_model
 
@@ -128,7 +129,7 @@ def main(args):
         os.makedirs(args.results_dir, exist_ok=True)  # Make results folder (holds all experiment subfolders)
         experiment_index = len(glob(f"{args.results_dir}/*"))
         model_string_name = args.model.replace("/", "-")  # e.g., DiT-XL/2 --> DiT-XL-2 (for naming folders)
-        experiment_dir = f"{args.results_dir}/{experiment_index:03d}-{model_string_name}"  # Create an experiment folder
+        experiment_dir = f"{args.results_dir}/{model_string_name}-{args.num_experts}E{args.num_experts_per_tok}A{args.pretraining_tp}TP"  # Create an experiment folder
         checkpoint_dir = f"{experiment_dir}/checkpoints"  # Stores saved model checkpoints
         os.makedirs(checkpoint_dir, exist_ok=True)
         logger = create_logger(experiment_dir)
@@ -157,7 +158,13 @@ def main(args):
     requires_grad(ema, False)
     # model = DDP(model.to(device), device_ids=[rank])
     model = DDP(model.to(device), device_ids=[device])
-    diffusion = create_diffusion(timestep_respacing="")  # default: 1000 steps, linear noise schedule 
+
+    if args.rf: 
+        logger.info("train with rectified flow")
+        diffusion = RectifiedFlow(model)
+    else:
+        diffusion = create_diffusion(timestep_respacing="")  # default: 1000 steps, linear noise schedule  
+
     vae = AutoencoderKL.from_pretrained(args.vae_path).to(device)
     logger.info(f"DiT Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
@@ -212,10 +219,15 @@ def main(args):
             with torch.no_grad():
                 # Map input images to latent space + normalize latents:
                 x = vae.encode(x).latent_dist.sample().mul_(0.18215)
-            t = torch.randint(0, diffusion.num_timesteps, (x.shape[0],), device=device)
-            model_kwargs = dict(y=y)
-            loss_dict = diffusion.training_losses(model, x, t, model_kwargs)
-            loss = loss_dict["loss"].mean()
+            
+            if args.rf: 
+                loss, _ = diffusion.forward(x, y)
+            else:
+                t = torch.randint(0, diffusion.num_timesteps, (x.shape[0],), device=device)
+                model_kwargs = dict(y=y)
+                loss_dict = diffusion.training_losses(model, x, t, model_kwargs)
+                loss = loss_dict["loss"].mean()
+            
             if (data_iter_step + 1) % args.accum_iter == 0:
                 opt.zero_grad()
             loss.backward()
@@ -278,9 +290,11 @@ if __name__ == "__main__":
     parser.add_argument("--global-seed", type=int, default=2024) 
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--log-every", type=int, default=100)
-    parser.add_argument('--accum_iter', default=8, type=int,)  
+    parser.add_argument('--accum_iter', default=1, type=int,)  
     parser.add_argument('--num_experts', default=8, type=int,) 
     parser.add_argument('--num_experts_per_tok', default=2, type=int,) 
-    parser.add_argument("--ckpt-every", type=int, default=50_000)
+    parser.add_argument('--pretraining_tp', default=2, type=int,) 
+    parser.add_argument("--ckpt-every", type=int, default=50_000) 
+    parser.add_argument("--rf", type=bool, default=False) 
     args = parser.parse_args()
     main(args) 
