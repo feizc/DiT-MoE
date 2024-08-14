@@ -12,14 +12,13 @@ DiT-MoE as a sparse version of the diffusion Transformer, is scalable and compet
 * ⚡️ Pre-trained checkpoints in paper
 * 💥 A [sampling script](sample.py) for running pre-trained DiT-MoE 
 * 🛸 A DiT-MoE training script using PyTorch [DDP](train.py) and [deepspeed](train_deepspeed.py)
-
+* 🌋 Rectified flow sampling strategy 
 
 ### To-do list
 
 - [x] training / inference scripts
 - [x] experts routing analysis
-- [ ] huggingface ckpts
-- [ ] synthesized data
+- [x] huggingface ckpts
 
 ### 1. Training 
 
@@ -68,6 +67,21 @@ python -m torch.distributed.launch --nnodes=1 --nproc_per_node=8 train_deepspeed
 --train_batch_size 32
 ```
 
+For rectified flow training as [FLUX](https://github.com/black-forest-labs/flux) and [SD3](https://stability.ai/news/stable-diffusion-3), you can run as: 
+```bash
+python -m torch.distributed.launch --nnodes=1 --nproc_per_node=8 train_deepspeed.py \
+--deepspeed_config config/zero2.json \
+--model DiT-XL/2 \
+--rf True \
+--num_experts 8 \
+--num_experts_per_tok 2 \
+--data-path /path/to/imagenet/train \
+--vae-path /path/to/vae \
+--train_batch_size 32
+```
+Our experiments show that rectified flow training leads to a better performance as well as faster convergence. 
+
+
 We also provide all shell scripts for different model size training in file folder *scripts*. 
 
 ### 2. Inference 
@@ -90,14 +104,13 @@ We are processing it as soon as possible, the model weights, data and used scrip
 We use sd vae in this [link](https://huggingface.co/feizhengcong/DiT-MoE/tree/main/sd-vae-ft-mse). 
 
 
-| DiT-MoE Model     | Image Resolution | Url | Scripts |
-|---------------|------------------|---------|---------|
-| DiT-MoE-S/2-8E2A | 256x256          | [link](https://huggingface.co/feizhengcong/DiT-MoE/blob/main/dit_moe_s_8E2A.pt)  | - | 
-| DiT-MoE-S/2-16E2A | 256x256         | -   | -|
-| DiT-MoE-B/2-8E2A | 256x256         | [link](https://huggingface.co/feizhengcong/DiT-MoE/blob/main/dit_moe_b_8E2A.pt)  | -|
-| DiT-MoE-XL/2-8E2A | 256x256         | -   | -|
-| DiT-MoE-XL/2-8E2A | 512x512         | -   | -|
-| DiT-MoE-G/2-16E2A | 512x512         | -   | -|
+| DiT-MoE Model     | Image Resolution | Url | Scripts | Loss curve |
+|---------------|------------------|---------|---------|-------|
+| DiT-MoE-S/2-8E2A | 256x256          | [link](https://huggingface.co/feizhengcong/DiT-MoE/blob/main/dit_moe_s_8E2A.pt)  | DDIM | -|
+| DiT-MoE-S/2-16E2A | 256x256         | [link](https://huggingface.co/feizhengcong/DiT-MoE/blob/main/dit_moe_s_16E2A.pt)  | DDIM| -|
+| DiT-MoE-B/2-8E2A | 256x256         | [link](https://huggingface.co/feizhengcong/DiT-MoE/blob/main/dit_moe_b_8E2A.pt)  | DDIM | -|
+| DiT-MoE-XL/2-8E2A | 256x256         | [link](https://huggingface.co/feizhengcong/DiT-MoE/blob/main/dit_moe_xl_8E2A.pt)   | RF|-|
+| DiT-MoE-G/2-16E2A | 512x512         | [link](https://huggingface.co/feizhengcong/DiT-MoE/blob/main/dit_moe_g_16E2A.pt)  | RF|-|
 
 
 ### 4. Expert Specialization Analysis Tools
