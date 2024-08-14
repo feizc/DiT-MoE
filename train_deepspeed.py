@@ -29,6 +29,7 @@ import os
 
 from models import DiT_models
 from diffusion import create_diffusion
+from diffusion.rectified_flow import RectifiedFlow
 from diffusers.models import AutoencoderKL
 from download import find_model
 import deepspeed
@@ -115,7 +116,10 @@ def main(args):
 
     # Setup an experiment folder 
     model_string_name = args.model.replace("/", "-")  # e.g., DiT-XL/2 --> DiT-XL-2 (for naming folders)
-    experiment_dir = f"{args.results_dir}/deepspeed-{model_string_name}"  # Create an experiment folder
+    if args.rf: 
+        experiment_dir = f"{args.results_dir}/deepspeed-{model_string_name}-rf"
+    else:
+        experiment_dir = f"{args.results_dir}/deepspeed-{model_string_name}"  # Create an experiment folder
     checkpoint_dir = f"{experiment_dir}/checkpoints"  # Stores saved model checkpoints
     
     if rank == 0:
@@ -142,9 +146,12 @@ def main(args):
         print('load from: ', args.resume) 
         state_dict = find_model(args.resume)
         model.load_state_dict(state_dict)
-
-
-    diffusion = create_diffusion(timestep_respacing="")  # default: 1000 steps, linear noise schedule 
+    
+    if args.rf: 
+        logger.info("train with rectified flow")
+        diffusion = RectifiedFlow(model)
+    else:
+        diffusion = create_diffusion(timestep_respacing="")  # default: 1000 steps, linear noise schedule 
     vae = AutoencoderKL.from_pretrained(args.vae_path).to(device)
     logger.info(f"DiT Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
@@ -194,11 +201,17 @@ def main(args):
             with torch.no_grad():
                 # Map input images to latent space + normalize latents:
                 x = vae.encode(x).latent_dist.sample().mul_(0.18215)
-            t = torch.randint(0, diffusion.num_timesteps, (x.shape[0],), device=device)
-            model_kwargs = dict(y=y)
-            with torch.autocast(device_type='cuda'):
-                loss_dict = diffusion.training_losses(model, x, t, model_kwargs)
-            loss = loss_dict["loss"].mean() 
+            if args.rf: 
+                with torch.autocast(device_type='cuda'): 
+                    loss, _ = diffusion.forward(x, y)
+            
+            else:
+                t = torch.randint(0, diffusion.num_timesteps, (x.shape[0],), device=device)
+                model_kwargs = dict(y=y)
+                with torch.autocast(device_type='cuda'):
+                    loss_dict = diffusion.training_losses(model, x, t, model_kwargs)
+                loss = loss_dict["loss"].mean() 
+            
             model_engine.backward(loss) 
             model_engine.step()
             
@@ -223,9 +236,13 @@ def main(args):
                 start_time = time()
 
             # Save DiT checkpoint:
-            if train_steps % args.ckpt_every == 0 and train_steps > 0:                 
-                checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}"
-                model_engine.save_checkpoint(checkpoint_path) 
+            if train_steps % args.ckpt_every == 0 and train_steps > 0:    
+                try:             
+                    checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}"
+                    model_engine.save_checkpoint(checkpoint_path) 
+                except Exception as e: 
+                    print(e)
+                
                 dist.barrier()
 
     # model.eval()  # important! This disables randomized embedding dropout
@@ -244,14 +261,15 @@ if __name__ == "__main__":
     parser.add_argument("--num-classes", type=int, default=1000)
     parser.add_argument("--epochs", type=int, default=1400) 
     parser.add_argument("--train_batch_size", type=int, default=2)
-    parser.add_argument("--global-seed", type=int, default=1234) 
-    parser.add_argument("--num-workers", type=int, default=4)
+    parser.add_argument("--global-seed", type=int, default=2024) 
+    parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument('--accum_iter', default=8, type=int,)  
     parser.add_argument('--num_experts', default=8, type=int,) 
     parser.add_argument('--num_experts_per_tok', default=2, type=int,) 
     parser.add_argument("--ckpt-every", type=int, default=10_000) 
     parser.add_argument('--local-rank', type=int, default=-1, help='local rank passed from distributed launcher') 
+    parser.add_argument("--rf", type=bool, default=False) 
     parser = deepspeed.add_config_arguments(parser)
     args = parser.parse_args() 
     print(args)

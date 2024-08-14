@@ -275,7 +275,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-classes", type=int, default=1000)
     parser.add_argument("--epochs", type=int, default=1400) 
     parser.add_argument("--global-batch-size", type=int, default=64)
-    parser.add_argument("--global-seed", type=int, default=1234) 
+    parser.add_argument("--global-seed", type=int, default=2024) 
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument('--accum_iter', default=8, type=int,)  

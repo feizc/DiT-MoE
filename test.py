@@ -106,12 +106,12 @@ def image_class_expert_ratio():
 
 def ckpts_clean(): 
     # only save ema ckpts for ckpt uploading 
-    ckpt_path = 'results/003-DiT-B-2/checkpoints/ckpt.pt' 
+    ckpt_path = 'results/003-DiT-B-2/checkpoints/ckpt2.pt' 
     checkpoint = torch.load(ckpt_path, map_location=lambda storage, loc: storage) 
     new_checkpoint = {
                         "ema": checkpoint['ema'],
                     }
-    torch.save(new_checkpoint, 'ckpt_clean.pt')
+    torch.save(new_checkpoint, 'dit_moe_b_8E2A.pt')
 
 
 

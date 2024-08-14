@@ -15,6 +15,7 @@ from diffusion import create_diffusion
 from diffusers.models import AutoencoderKL
 from download import find_model
 from models import DiT_models
+from diffusion.rectified_flow import RectifiedFlow 
 import argparse
 
 
@@ -60,17 +61,21 @@ def main(args):
         elif args.model == "DiT-B/2":
             ckpt_path = "dit_moe_b_8E2A.pt" 
         elif args.model == "DiT-XL/2": 
-            ckpt_path = "results/deepspeed-DiT-XL-2/checkpoints/ckpt.pt" 
+            ckpt_path = "results/deepspeed-DiT-XL-2-rf/checkpoints/tmp.pt" 
         else: 
-            ckpt_path = "results/deepspeed-DiT-G-2/checkpoints/ckpt.pt" 
+            ckpt_path = "results/deepspeed-DiT-G-2-rf/checkpoints/tmp.pt" 
     else:
         ckpt_path = args.ckpt 
 
 
     state_dict = find_model(ckpt_path)
     model.load_state_dict(state_dict)
-    model.eval()  # important!
-    diffusion = create_diffusion(str(args.num_sampling_steps))
+    model.eval()  # important! 
+
+    if args.rf:
+        diffusion = RectifiedFlow(model)
+    else:
+        diffusion = create_diffusion(str(args.num_sampling_steps))
     vae = AutoencoderKL.from_pretrained(args.vae_path).to(device) 
     
     # Labels to condition the model with (feel free to change):
@@ -88,17 +93,28 @@ def main(args):
     model_kwargs = dict(y=y, cfg_scale=args.cfg_scale)
 
     if dtype == torch.float16: 
-        with torch.autocast(device_type='cuda'):
-            samples = diffusion.p_sample_loop(
-                model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device
-            )
+        if args.rf: 
+            with torch.autocast(device_type='cuda'):
+                STEPSIZE = 50
+                init_noise = torch.randn(n, 4, latent_size, latent_size, device=device) 
+                conds = torch.tensor(class_labels, device=device)
+                images = diffusion.sample_with_xps(init_noise, conds, null_cond = torch.tensor([1000] * n).cuda(), sample_steps = STEPSIZE, cfg = 7.0)
+                samples = vae.decode(images[-1] / 0.18215).sample
+        
+        else:
+            with torch.autocast(device_type='cuda'):
+                samples = diffusion.p_sample_loop(
+                    model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device
+                )
+            samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
+            samples = vae.decode(samples / 0.18215).sample
+    
     else:
         samples = diffusion.p_sample_loop(
                 model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device
             )
-    
-    samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
-    samples = vae.decode(samples / 0.18215).sample
+        samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
+        samples = vae.decode(samples / 0.18215).sample
 
     # Save and display images: 
     if args.model == "DiT-S/2":
@@ -113,15 +129,16 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-XL/2")
+    parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-G/2")
     parser.add_argument("--vae-path", type=str, default="/maindata/data/shared/multimodal/zhengcong.fei/ckpts/sd-vae-ft-mse")
     parser.add_argument("--image-size", type=int, choices=[256, 512], default=256)
     parser.add_argument("--num-classes", type=int, default=1000)
     parser.add_argument("--cfg-scale", type=float, default=4.0)
-    parser.add_argument('--num_experts', default=8, type=int,) 
+    parser.add_argument('--num_experts', default=16, type=int,) 
     parser.add_argument('--num_experts_per_tok', default=2, type=int,) 
     parser.add_argument("--num-sampling-steps", type=int, default=250)
     parser.add_argument("--seed", type=int, default=2024)
     parser.add_argument("--ckpt", type=str, default=None, )
+    parser.add_argument("--rf", type=bool, default=True) 
     args = parser.parse_args()
-    main(args)
+    main(args) 
