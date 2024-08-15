@@ -214,22 +214,22 @@ def main(args):
             
             model_engine.backward(loss) 
 
-            if (data_iter_step + 1) % args.accum_iter == 0:
+            if (data_iter_step + 1) % args.accum_iter == 0: 
                 model_engine.step()
-                log_steps += 1
-                train_steps += 1
             
+            log_steps += 1
+            train_steps += 1
             data_iter_step += 1
             # Log loss values:
             running_loss += loss.item()
             
-            if train_steps % args.log_every == 0 and train_steps > 0:
+            if train_steps % args.log_every == 0:
                 # Measure training speed:
                 torch.cuda.synchronize()
                 end_time = time()
                 steps_per_sec = log_steps / (end_time - start_time)
                 # Reduce loss history over all processes:
-                avg_loss = torch.tensor(running_loss / data_iter_step, device=device)
+                avg_loss = torch.tensor(running_loss / log_steps, device=device)
                 dist.all_reduce(avg_loss, op=dist.ReduceOp.SUM)
                 avg_loss = avg_loss.item() / dist.get_world_size()
                 logger.info(f"(step={train_steps:07d}) Train Loss: {avg_loss:.4f}, Train Steps/Sec: {steps_per_sec:.2f}")
@@ -239,7 +239,7 @@ def main(args):
                 start_time = time()
 
             # Save DiT checkpoint:
-            if train_steps % args.ckpt_every == 0 and train_steps > 0:                 
+            if train_steps % args.ckpt_every == 0 and train_steps > 0:                   
                 try:             
                     checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}"
                     model_engine.save_checkpoint(checkpoint_path) 
@@ -267,7 +267,7 @@ if __name__ == "__main__":
     parser.add_argument("--global-seed", type=int, default=2023) 
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--log-every", type=int, default=100)
-    parser.add_argument('--accum_iter', default=8, type=int,)  
+    parser.add_argument('--accum_iter', default=4, type=int,)  
     parser.add_argument('--num_experts', default=8, type=int,) 
     parser.add_argument('--num_experts_per_tok', default=2, type=int,) 
     parser.add_argument("--ckpt-every", type=int, default=10_000) 
