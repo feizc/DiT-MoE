@@ -214,7 +214,7 @@ def main(args):
             
             model_engine.backward(loss) 
 
-            if model_engine.is_gradient_accumulation_boundary(): 
+            if (data_iter_step + 1) % args.accum_iter == 0:
                 model_engine.step()
                 log_steps += 1
                 train_steps += 1
