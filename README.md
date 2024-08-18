@@ -10,9 +10,10 @@ DiT-MoE as a sparse version of the diffusion Transformer, is scalable and compet
 
 * 🪐 A PyTorch [implementation](models.py) of DiT-MoE
 * ⚡️ Pre-trained checkpoints in paper
+* 🌋 **Rectified flow**-based training and sampling scripts 
 * 💥 A [sampling script](sample.py) for running pre-trained DiT-MoE 
 * 🛸 A DiT-MoE training script using PyTorch [DDP](train.py) and [deepspeed](train_deepspeed.py)
-* 🌋 Rectified flow sampling strategy 
+
 
 ### To-do list
 
