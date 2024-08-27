@@ -8,11 +8,11 @@ DiT-MoE as a sparse version of the diffusion Transformer, is scalable and compet
 ![DiT-MoE framework](visuals/framework.png) 
 
 
-* 🪐 A PyTorch [implementation](models.py) of DiT-MoE
-* ⚡️ Pre-trained checkpoints in paper
+* 🪐 A PyTorch [implementation](models.py) of DiT-MoE and pre-trained checkpoints in paper
 * 🌋 **Rectified flow**-based training and sampling scripts 
 * 💥 A [sampling script](sample.py) for running pre-trained DiT-MoE 
 * 🛸 A DiT-MoE training script using PyTorch [DDP](train.py) and [deepspeed](train_deepspeed.py)
+* ⚡️  A **upcycle** [scripts](https://github.com/feizc/DiT-MoE/blob/main/upcycle.py) to convert dense to MoE ckpts referring [link](https://github.com/alibaba/Pai-Megatron-Patch/blob/main/toolkits/model_checkpoints_convertor/qwen/hf2mcore_qwen1.5_dense_to_moe_convertor.sh) 
 
 
 ### To-do list
