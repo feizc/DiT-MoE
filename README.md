@@ -100,7 +100,7 @@ python sample.py \
 
 ### 3. Download Models and Data 
 
-We are processing it as soon as possible, the model weights, data and used scripts for results reproduce will be released within two weeks continuously :) 
+The model weights, data and used scripts for results reproduce are listed as follows. 
 
 We use sd vae in this [link](https://huggingface.co/feizhengcong/DiT-MoE/tree/main/sd-vae-ft-mse). 
 
