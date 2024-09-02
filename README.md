@@ -111,7 +111,7 @@ We use sd vae in this [link](https://huggingface.co/feizhengcong/DiT-MoE/tree/ma
 | DiT-MoE-S/2-16E2A | 256x256         | [link](https://huggingface.co/feizhengcong/DiT-MoE/blob/main/dit_moe_s_16E2A.pt)  | DDIM| -|
 | DiT-MoE-B/2-8E2A | 256x256         | [link](https://huggingface.co/feizhengcong/DiT-MoE/blob/main/dit_moe_b_8E2A.pt)  | DDIM | -|
 | DiT-MoE-XL/2-8E2A | 256x256         | [link](https://huggingface.co/feizhengcong/DiT-MoE/blob/main/dit_moe_xl_8E2A.pt)   | RF|-|
-| DiT-MoE-G/2-16E2A | 512x512         | [link](https://huggingface.co/feizhengcong/DiT-MoE/blob/main/dit_moe_g_16E2A.pt)  | RF|-|
+| DiT-MoE-G/2-16E2A | 256x256         | [link](https://huggingface.co/feizhengcong/DiT-MoE/blob/main/dit_moe_g_16E2A.pt)  | RF|-|
 
 
 ### 4. Expert Specialization Analysis Tools
