@@ -8,7 +8,7 @@ from diffusion import create_diffusion
 
 def calculate_params_and_flops(): 
     image_size = 256 
-    model = "DiT-G/2" 
+    model = "DiT-S/2" 
     num_classes = 1000 
     device = "cuda" 
     ckpt_path = None # "results/002-DiT-S-2/checkpoints/1350000.pt" 
@@ -17,7 +17,7 @@ def calculate_params_and_flops():
     model = DiT_models[model](
         input_size=latent_size,
         num_classes=num_classes,
-        num_experts=16, 
+        num_experts=8, 
         num_experts_per_tok=2,
     ).to(device).half()
 
@@ -31,10 +31,21 @@ def calculate_params_and_flops():
     x = torch.randn(1, 4, 32, 32).cuda().half()
     t = torch.randint(1, 1000, (1,)).cuda().half()
     y = torch.randint(1, 1000, (1,)).cuda()
+    
+    # Note that thop library may does not support dynamic computation graph(i.e for and if in moe code) in pytorch 
+    # we update the following calculation from: aicfw.li@gmail.com 
     with torch.no_grad():
         flops, _ = profile(model, inputs=(x, t, y)) 
     print('FLOPs = ' + str(flops * 2/1000**3) + 'G')
 
+    from torchprofile import profile_macs
+    flops2 = profile_macs(model, (x, t, y))
+    print(f'FLOPS by torchprofile {flops2/1e9:.2f}G')
+
+    from calflops import calculate_flops
+    flops4, macs4, params4 = calculate_flops(model, kwargs={'x': x, 't': t, 'y': y}, print_results=False)
+    print(f"FLOPs by calflops: {flops4}")
+    print(f'MACs by calflops: {macs4}, Params by calflops: {params4}')
     
 
 def image_class_expert_ratio(): 
@@ -116,5 +127,5 @@ def ckpts_clean():
 
 
 # image_class_expert_ratio()
-# calculate_params_and_flops() 
-ckpts_clean()
+calculate_params_and_flops() 
+# ckpts_clean()
